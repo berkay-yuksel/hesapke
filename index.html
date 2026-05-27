@@ -430,24 +430,38 @@
         </div>
       </div>
 
-      <!-- Toplam Satış: 100 - 20000, adım 100 -->
+      <!-- Toplam Satış: 10 - 20000, adım 10 -->
       <div class="slider-group">
         <div class="slider-label">
           <span>Toplam Satış</span>
           <span class="slider-value" id="totalSalesVal">3,500</span>
         </div>
-        <input type="range" id="totalSales" min="100" max="20000" step="100" value="3500">
+        <input type="range" id="totalSales" min="10" max="20000" step="10" value="3500">
         <div class="manual-input-row">
           <label>Manuel:</label>
-          <input type="number" id="totalSalesManual" min="100" max="20000" step="100" value="3500">
+          <input type="number" id="totalSalesManual" min="10" max="20000" step="10" value="3500">
           <label>adet</label>
         </div>
       </div>
 
-      <!-- Ödül Havuzu: 1 - 500 SOL, adım 1 -->
+      <!-- Havuz Aralığı -->
       <div class="slider-group">
         <div class="slider-label">
-          <span>Ödül Havuzu (her 500'de)</span>
+          <span>Havuz Aralığı (her X satışta)</span>
+          <span class="slider-value" id="poolIntervalVal">her 500</span>
+        </div>
+        <input type="range" id="poolInterval" min="10" max="2000" step="10" value="500">
+        <div class="manual-input-row">
+          <label>Manuel:</label>
+          <input type="number" id="poolIntervalManual" min="10" max="2000" step="10" value="500">
+          <label>satışta bir havuz</label>
+        </div>
+      </div>
+
+      <!-- Ödül Havuzu: 0 - 500 SOL, adım 1 -->
+      <div class="slider-group">
+        <div class="slider-label">
+          <span>Ödül Havuzu</span>
           <span class="slider-value" id="rewardPoolVal">45 SOL</span>
         </div>
         <input type="range" id="rewardPool" min="0" max="500" step="1" value="45">
@@ -625,9 +639,10 @@
     { mint: 1.0,  reward: 45 },
   ];
 
-  function calcShare(mint, sales, reward, sol, team) {
+  function calcShare(mint, sales, reward, sol, team, interval) {
+    interval = interval || 500;
     const totalSol = mint * sales;
-    const pools = Math.floor(sales / 500);
+    const pools = interval > 0 ? Math.floor(sales / interval) : 0;
     const totalReward = pools * reward;
     const projectSol = totalSol - totalReward;
     return {
@@ -640,8 +655,8 @@
       projectUSD: projectSol * sol,
       totalUSD: totalSol * sol,
       totalRewardUSD: totalReward * sol,
-      poolRevenue: mint * 500,
-      rewardRate: (reward / (mint * 500)) * 100
+      poolRevenue: mint * interval,
+      rewardRate: interval > 0 ? (reward / (mint * interval)) * 100 : 0
     };
   }
 
@@ -689,26 +704,28 @@
   }
 
   function update() {
-    const mint  = getVal('mintPrice');
-    const sales = parseInt(document.getElementById('totalSales').value);
-    const reward= parseInt(document.getElementById('rewardPool').value);
-    const sol   = parseInt(document.getElementById('solPrice').value);
-    const team  = parseInt(document.getElementById('teamSize').value);
+    const mint     = getVal('mintPrice');
+    const sales    = parseInt(document.getElementById('totalSales').value);
+    const reward   = parseInt(document.getElementById('rewardPool').value);
+    const sol      = parseInt(document.getElementById('solPrice').value);
+    const team     = parseInt(document.getElementById('teamSize').value);
+    const interval = parseInt(document.getElementById('poolInterval').value) || 500;
 
-    document.getElementById('mintPriceVal').textContent  = mint.toFixed(2) + ' SOL';
-    document.getElementById('totalSalesVal').textContent = sales.toLocaleString('tr');
-    document.getElementById('rewardPoolVal').textContent = reward + ' SOL';
-    document.getElementById('solPriceVal').textContent   = '$' + sol;
-    document.getElementById('teamSizeVal').textContent   = team + ' kişi';
+    document.getElementById('mintPriceVal').textContent    = mint.toFixed(2) + ' SOL';
+    document.getElementById('totalSalesVal').textContent   = sales.toLocaleString('tr');
+    document.getElementById('rewardPoolVal').textContent   = reward + ' SOL';
+    document.getElementById('solPriceVal').textContent     = '$' + sol;
+    document.getElementById('teamSizeVal').textContent     = team + ' kişi';
+    document.getElementById('poolIntervalVal').textContent = 'her ' + interval.toLocaleString('tr');
 
     // Update slider track gradient
-    ['mintPrice', 'totalSales', 'rewardPool', 'solPrice', 'teamSize'].forEach(id => {
+    ['mintPrice', 'totalSales', 'rewardPool', 'poolInterval', 'solPrice', 'teamSize'].forEach(id => {
       const el = document.getElementById(id);
       const pct = (el.value - el.min) / (el.max - el.min) * 100;
       el.style.setProperty('--progress', pct + '%');
     });
 
-    const r = calcShare(mint, sales, reward, sol, team);
+    const r = calcShare(mint, sales, reward, sol, team, interval);
 
     document.getElementById('yourShare').textContent        = fmt(r.yourShareUSD);
     document.getElementById('yourShareSol').textContent     = fmtSol(r.yourShare);
@@ -719,7 +736,7 @@
     document.getElementById('totalReward').textContent      = fmt(r.totalRewardUSD);
     document.getElementById('totalRewardSol').textContent   = fmtSol(r.totalReward);
     document.getElementById('poolCount').textContent        = r.pools + ' havuz';
-    document.getElementById('poolRevenue').textContent      = fmtSol(r.poolRevenue) + ' ≈ ' + fmt(r.poolRevenue * sol);
+    document.getElementById('poolRevenue').textContent      = fmtSol(r.poolRevenue) + ' ≈ ' + fmt(r.poolRevenue * sol) + ' (her ' + interval.toLocaleString('tr') + ')';
     document.getElementById('rewardRate').textContent       = r.rewardRate.toFixed(1) + '%';
     document.getElementById('mintUSD').textContent          = fmt(mint * sol);
 
@@ -748,13 +765,13 @@
 
     // Senaryo tablosu
     const tbody = document.getElementById('scenarioBody');
-    const all5500 = scenarios.map(x => calcShare(x.mint, 5500, x.reward, sol, team).yourShareUSD);
+    const all5500 = scenarios.map(x => calcShare(x.mint, 5500, x.reward, sol, team, interval).yourShareUSD);
     const max5500 = Math.max(...all5500);
 
     tbody.innerHTML = scenarios.map(s => {
-      const r3500 = calcShare(s.mint, 3500, s.reward, sol, team);
-      const r5500 = calcShare(s.mint, 5500, s.reward, sol, team);
-      const rate = (s.reward / (s.mint * 500) * 100).toFixed(1);
+      const r3500 = calcShare(s.mint, 3500, s.reward, sol, team, interval);
+      const r5500 = calcShare(s.mint, 5500, s.reward, sol, team, interval);
+      const rate = interval > 0 ? (s.reward / (s.mint * interval) * 100).toFixed(1) : '0.0';
       const isActive = Math.abs(s.mint - mint) < 0.005 && s.reward === reward;
       const isBest = Math.abs(r5500.yourShareUSD - max5500) < 1;
 
@@ -800,7 +817,7 @@
   }
 
   function getBudget() {
-    return parseFloat(document.getElementById('rewardPool').value);
+    return parseFloat(document.getElementById('rewardPool').value) || 0;
   }
 
   function updateBudget() {
@@ -899,11 +916,12 @@
   });
 
   // Slider-manuel bağlantıları
-  linkSliderManual('mintPrice',  'mintPriceManual',  update);
-  linkSliderManual('totalSales', 'totalSalesManual', update);
-  linkSliderManual('rewardPool', 'rewardPoolManual', update);
-  linkSliderManual('solPrice',   'solPriceManual',   update);
-  linkSliderManual('teamSize',   'teamSizeManual',   update);
+  linkSliderManual('mintPrice',    'mintPriceManual',    update);
+  linkSliderManual('totalSales',   'totalSalesManual',   update);
+  linkSliderManual('rewardPool',   'rewardPoolManual',   update);
+  linkSliderManual('poolInterval', 'poolIntervalManual', update);
+  linkSliderManual('solPrice',     'solPriceManual',     update);
+  linkSliderManual('teamSize',     'teamSizeManual',     update);
 
   // Init
   renderCollections();
